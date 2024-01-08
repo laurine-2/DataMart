@@ -1,28 +1,39 @@
 import gc
 import os
 import sys
-
+import chardet
 import pandas as pd
 from sqlalchemy import create_engine
+
+
+def detect_encoding(file_path: str) -> str:
+    """
+    Detects the encoding of a file.
+    Parameters:
+        - file_path (str): The path to the file.
+    Returns:
+        - str: The detected encoding.
+    """
+    with open(file_path, 'rb') as f:
+        result = chardet.detect(f.read())
+    return result['encoding']
 
 
 def write_data_postgres(dataframe: pd.DataFrame) -> bool:
     """
     Dumps a Dataframe to the DBMS engine
-
     Parameters:
         - dataframe (pd.Dataframe) : The dataframe to dump into the DBMS engine
-
     Returns:
         - bool : True if the connection to the DBMS and the dump to the DBMS is successful, False if either
         execution is failed
     """
     db_config = {
         "dbms_engine": "postgresql",
-        "dbms_username": "postgres",
-        "dbms_password": "admin",
+        "dbms_username": "root",
+        "dbms_password": "admin123",
         "dbms_ip": "localhost",
-        "dbms_port": "15432",
+        "dbms_port": "5432",
         "dbms_database": "nyc_warehouse",
         "dbms_table": "nyc_raw"
     }
@@ -51,7 +62,6 @@ def clean_column_name(dataframe: pd.DataFrame) -> pd.DataFrame:
     Take a Dataframe and rewrite it columns into a lowercase format.
     Parameters:
         - dataframe (pd.DataFrame) : The dataframe columns to change
-
     Returns:
         - pd.Dataframe : The changed Dataframe into lowercase format
     """
@@ -60,12 +70,17 @@ def clean_column_name(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    folder_path: str = "../../data/raw/"
+    folder_path = 'D:/Projet/DataMart/ATL-Datamart/data/raw/'
     parquet_files = [f for f in os.listdir(folder_path) if
                      f.lower().endswith('.parquet') and os.path.isfile(os.path.join(folder_path, f))]
 
     for parquet_file in parquet_files:
-        parquet_df: pd.DataFrame = pd.read_parquet(folder_path + parquet_file, engine='pyarrow')
+        file_path = os.path.join(folder_path, parquet_file)
+        encoding = detect_encoding(file_path)
+
+        # Read Parquet file with detected encoding
+        parquet_df: pd.DataFrame = pd.read_parquet(file_path, engine='pyarrow', encoding=encoding)
+
         clean_column_name(parquet_df)
         if not write_data_postgres(parquet_df):
             del parquet_df
